@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Screen Share</title>
+    <style>
+        video { width: 100%; max-width: 800px; border: 2px solid #333; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Chromebook Screen Share</h1>
+    <button id="startBtn">Start Sharing My Screen</button>
+    <br><br>
+    <video id="localVideo" autoplay playsinline muted></video>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const videoElem = document.getElementById('localVideo');
+
+        startBtn.onclick = async () => {
+            try {
+                // This triggers the ChromeOS permission popup
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { cursor: "always" },
+                    audio: false
+                });
+                videoElem.srcObject = stream;
+            } catch (err) {
+                console.error("Error: " + err);
+            }
+        };
+    </script>
+</body>
+</html>
