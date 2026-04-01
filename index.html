@@ -1,67 +1,91 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Arduino Remote View</title>
+    <title>Easy Screen Share</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; text-align: center; }
-        video { width: 90%; max-width: 1000px; border: 3px solid #3498db; border-radius: 10px; margin-top: 20px; }
-        .controls { margin: 20px; padding: 20px; background: #1e1e1e; border-radius: 10px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 5px; }
-        #peer-id { color: #f1c40f; font-weight: bold; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; text-align: center; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #1a1a1a; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        video { width: 100%; border-radius: 10px; background: #000; margin-top: 20px; border: 2px solid #333; }
+        .btn { padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 5px; }
+        .btn-share { background: #3498db; color: white; }
+        .btn-watch { background: #2ecc71; color: white; }
+        input { padding: 12px; border-radius: 8px; border: 1px solid #333; background: #222; color: white; width: 200px; }
+        #status { color: #f1c40f; margin-bottom: 20px; font-size: 0.9em; }
     </style>
 </head>
 <body>
-    <h1>Screen Share for Arduino Control</h1>
+
+<div class="container">
+    <h1>Remote Screen View</h1>
+    <div id="status">Ready.</div>
     
-    <div class="controls">
-        <p>My ID: <span id="peer-id">Connecting...</span></p>
-        <input type="text" id="remote-id" placeholder="Enter ID to Watch">
-        <button onclick="startSharing()">Share My Screen</button>
-        <button onclick="connectToPeer()" style="background:#2ecc71">Watch Remote Screen</button>
-    </div>
+    <input type="text" id="room-input" placeholder="Enter Room Name">
+    <button class="btn btn-share" onclick="startSharing()">Start Sharing</button>
+    <button class="btn btn-watch" onclick="joinRoom()">Join Room</button>
 
-    <video id="display" autoplay playsinline></video>
+    <video id="remote-video" autoplay playsinline></video>
+</div>
 
-    <script>
-        const peer = new Peer(); // Connects to PeerJS free cloud server
-        let localStream;
+<script>
+    let peer = null;
+    let localStream = null;
+    const videoElem = document.getElementById('remote-video');
+    const status = document.getElementById('status');
 
-        // Display your unique ID
-        peer.on('open', (id) => {
-            document.getElementById('peer-id').innerText = id;
+    function initPeer(id) {
+        if (peer) peer.destroy();
+        peer = new Peer(id); // Use the room name as the ID
+        
+        peer.on('open', () => {
+            status.innerText = "Room Active: " + id;
         });
 
-        // SHARING LOGIC (Run this on Chromebook)
-        async function startSharing() {
-            try {
-                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                document.getElementById('display').srcObject = localStream;
-            } catch (err) {
-                console.error("Error capturing screen:", err);
+        peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') {
+                status.innerText = "Error: Room is already occupied by a sharer.";
+            } else {
+                status.innerText = "Error: " + err.type;
             }
-        }
+        });
 
-        // RECEIVING LOGIC (Run this on Phone)
-        function connectToPeer() {
-            const remoteId = document.getElementById('remote-id').value;
-            const call = peer.call(remoteId, localStream); // In this setup, we call with no stream to receive one
-            
-            peer.on('call', (incomingCall) => {
-                incomingCall.answer(); // Answer without sending a stream back
-                incomingCall.on('stream', (remoteStream) => {
-                    document.getElementById('display').srcObject = remoteStream;
-                });
-            });
-        }
-
-        // Automatically answer if someone calls us (Phone watching Chromebook)
+        // Answer incoming calls (the watcher)
         peer.on('call', (call) => {
             call.answer(); 
             call.on('stream', (stream) => {
-                document.getElementById('display').srcObject = stream;
+                videoElem.srcObject = stream;
             });
         });
-    </script>
+    }
+
+    async function startSharing() {
+        const roomName = document.getElementById('room-input').value;
+        if (!roomName) return alert("Please enter a room name!");
+        
+        try {
+            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            initPeer(roomName); // The Sharer owns the ID
+            videoElem.srcObject = localStream;
+            status.innerText = "Sharing screen in room: " + roomName;
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    function joinRoom() {
+        const roomName = document.getElementById('room-input').value;
+        if (!roomName) return alert("Please enter a room name!");
+
+        // The watcher doesn't use the room name as their ID (they need a random one)
+        peer = new Peer(); 
+        peer.on('open', (id) => {
+            status.innerText = "Watching Room: " + roomName;
+            const call = peer.call(roomName, new MediaStream()); // Call the sharer
+            call.on('stream', (stream) => {
+                videoElem.srcObject = stream;
+            });
+        });
+    }
+</script>
 </body>
 </html>
