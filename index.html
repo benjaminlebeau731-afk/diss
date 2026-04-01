@@ -1,34 +1,67 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Simple Screen Share</title>
+    <title>Arduino Remote View</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        video { width: 100%; max-width: 800px; border: 2px solid #333; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        body { font-family: sans-serif; background: #121212; color: white; text-align: center; }
+        video { width: 90%; max-width: 1000px; border: 3px solid #3498db; border-radius: 10px; margin-top: 20px; }
+        .controls { margin: 20px; padding: 20px; background: #1e1e1e; border-radius: 10px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 5px; }
+        #peer-id { color: #f1c40f; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>Chromebook Screen Share</h1>
-    <button id="startBtn">Start Sharing My Screen</button>
-    <br><br>
-    <video id="localVideo" autoplay playsinline muted></video>
+    <h1>Screen Share for Arduino Control</h1>
+    
+    <div class="controls">
+        <p>My ID: <span id="peer-id">Connecting...</span></p>
+        <input type="text" id="remote-id" placeholder="Enter ID to Watch">
+        <button onclick="startSharing()">Share My Screen</button>
+        <button onclick="connectToPeer()" style="background:#2ecc71">Watch Remote Screen</button>
+    </div>
+
+    <video id="display" autoplay playsinline></video>
 
     <script>
-        const startBtn = document.getElementById('startBtn');
-        const videoElem = document.getElementById('localVideo');
+        const peer = new Peer(); // Connects to PeerJS free cloud server
+        let localStream;
 
-        startBtn.onclick = async () => {
+        // Display your unique ID
+        peer.on('open', (id) => {
+            document.getElementById('peer-id').innerText = id;
+        });
+
+        // SHARING LOGIC (Run this on Chromebook)
+        async function startSharing() {
             try {
-                // This triggers the ChromeOS permission popup
-                const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { cursor: "always" },
-                    audio: false
-                });
-                videoElem.srcObject = stream;
+                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                document.getElementById('display').srcObject = localStream;
             } catch (err) {
-                console.error("Error: " + err);
+                console.error("Error capturing screen:", err);
             }
-        };
+        }
+
+        // RECEIVING LOGIC (Run this on Phone)
+        function connectToPeer() {
+            const remoteId = document.getElementById('remote-id').value;
+            const call = peer.call(remoteId, localStream); // In this setup, we call with no stream to receive one
+            
+            peer.on('call', (incomingCall) => {
+                incomingCall.answer(); // Answer without sending a stream back
+                incomingCall.on('stream', (remoteStream) => {
+                    document.getElementById('display').srcObject = remoteStream;
+                });
+            });
+        }
+
+        // Automatically answer if someone calls us (Phone watching Chromebook)
+        peer.on('call', (call) => {
+            call.answer(); 
+            call.on('stream', (stream) => {
+                document.getElementById('display').srcObject = stream;
+            });
+        });
     </script>
 </body>
 </html>
